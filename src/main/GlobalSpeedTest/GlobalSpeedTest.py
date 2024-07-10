@@ -146,6 +146,8 @@ class GlobalSpeedTestHandler:
         data = {
             "code": 0,
             "msg": "SPD_TEST",
+            "cloud": "非睿易应用",
+            "env": "非睿易应用", # 对接正式/测试
             "tag": tag,
             "data": {
                 "downrate": downrate,
