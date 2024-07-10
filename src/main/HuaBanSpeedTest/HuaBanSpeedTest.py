@@ -227,4 +227,3 @@ def main():
 if __name__ == "__main__":
     main()
     
-# java -jar bundletool-all.jar build-apks --bundle=/path/to/your/app.aab --output=/path/to/your/output.apks --ks=/path/to/your/keystore --ks-pass=pass:your_keystore_password --ks-key-alias=your_key_alias --key-pass=pass:your_key_password
