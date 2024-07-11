@@ -218,7 +218,7 @@ class GlobalSpeedTestHandler:
 def main():
     webhook = 'https://www.feishu.cn/flow/api/trigger-webhook/d6a7561781e891410f1b264bf2677bed'
     gst = GlobalSpeedTestHandler("com.cnspeedtest.globalspeed", 12, 4723, "/wd/hub", webhook)
-    gst.batch_execute_speed_test(5)
+    gst.batch_execute_speed_test(100)
     gst.close()
     
 
