@@ -7,14 +7,18 @@ import statistics
 import pandas
 import openpyxl
 import json
+import src.main.model_mapping.model_mapping as mapping
 
 from openpyxl.drawing.image import Image
+from openpyxl.styles import Alignment
+from loguru import logger
 
 class DataAnalysHandler:
     
-    def __init__(self, input_file_path, output_file_path) -> None:
+    def __init__(self, input_file_path, output_file_path, model_base_path = "D:/pyproj/st/src/main/model_mapping/models.xlsx") -> None:
         self.input_file_path = input_file_path
         self.output_file_path = output_file_path
+        self.model_mapping = mapping.ModelMapping(model_base_path)
         
     def transfer_xlsx_to_json(self):
         df = pandas.read_excel(self.input_file_path, sheet_name="测速数据收集")
@@ -23,6 +27,8 @@ class DataAnalysHandler:
         # 需要将数据转换成：
         # data = {
         #     "环境1":{
+        #         "standard_uprate": 123,
+        #         "standard_downrate": 123,
         #         "云端1":{
         #             "云端环境1":{
         #                 "版本1":{
@@ -83,29 +89,59 @@ class DataAnalysHandler:
         # 5. 上行波动范围: 最大值-最小值
         # 6. 下行波动范围: 最大值-最小值
         # 输出数据:
-        output = [
-            {
-                "环境": "环境1",
-                "云端": "云端1",
-                "版本": "版本1",
-                "设备型号": "型号1_系统1",
-                "上行平均值": 123,
-                "下行平均值": 123,
-                "上行波动值": 123,
-                "下行波动值": 123,
-                "上行波动范围": 123,
-                "下行波动范围": 123,
-                "上行分布图": "path/to/figure1.png",
-                "下行分布图": "path/to/figure2.png",
-                "样本数量": 123
-            },
-            {...}
-        ]
+        # output = [
+        #     {
+        #         "环境": "环境1",
+        #         "云端": "云端1",
+        #         "版本": "版本1",
+        #         "设备型号": "型号1_系统1",
+        #         "上行平均值": 123,
+        #         "下行平均值": 123,
+        #         "上行波动值": 123,
+        #         "下行波动值": 123,
+        #         "上行波动范围": 123,
+        #         "下行波动范围": 123,
+        #         "上行分布图": "path/to/figure1.png",
+        #         "下行分布图": "path/to/figure2.png",
+        #         "样本数量": 123
+        #     },
+        #     {...}
+        # ]
+        # 先遍历env中的版本，判断是否有“信通院全球网测”，如果有, 将每种机型下的上下行速率分别合并成数组，并从大到小排列, 生成标准数据
+        for env in data:
+            logger.info(data[env].keys())
+            if "非睿易应用" in data[env].keys() and "信通院全球网测" in data[env]["非睿易应用"]["非睿易应用"]:
+                up_result = []
+                down_result = []
+                for device in data[env]["非睿易应用"]["非睿易应用"]["信通院全球网测"]:
+                    devices = data[env]["非睿易应用"]["非睿易应用"]["信通院全球网测"]
+                    up_result.extend([i["uprate"] for i in devices[device]["测试数据"]])
+                    down_result.extend([i["downrate"] for i in devices[device]["测试数据"]])
+                # 将两个列表分别从大到小排序
+                up_result.sort(reverse=True)
+                down_result.sort(reverse=True)
+                # 取标准值：如果最大值与中位数偏差较大的情况下取较小的下一个， 直到数值和中位数偏差40%以内
+                up_middle = statistics.median(up_result)
+                down_middle = statistics.median(down_result)
+                up_standard = up_result[[i for i in range(len(up_result)) if (abs(up_result[i] - up_middle) / up_middle < 0.4)][0]]
+                down_standard = down_result[[i for i in range(len(down_result)) if (abs(down_result[i] - down_middle) / down_middle < 0.4)][0]]
+                data[env]["up_standard"] = up_standard
+                data[env]["up_standard_list"] = up_result
+                data[env]["down_standard"] = down_standard
+                data[env]["down_standard_list"] = down_result
+                logger.info("up_standard: {}, down_standard: {}", up_standard, down_standard)
+                
         output = []
+        # print(data)
         for env in data:
             for cloud in data[env]:
+                # print(cloud)
+                if cloud == "up_standard" or cloud == "down_standard" or cloud == "up_standard_list" or cloud == "down_standard_list":
+                    continue
                 for cloud_env in data[env][cloud]:
+                    # print(data[env][cloud][cloud_env])
                     for version in data[env][cloud][cloud_env]:
+                        # print(version)
                         for model in data[env][cloud][cloud_env][version]:
                             uprates = []
                             downrates = []
@@ -123,13 +159,13 @@ class DataAnalysHandler:
                             downrate_range = max(downrates) - min(downrates)
                             # 绘制上下行偏差分布图
                             path = "src/main/DataAnalysHandler/figures/"
-                            uprate_file_path = self.generate_and_save_plot(uprates, path, f"{env}_{cloud}_{cloud_env}_{version}_{model}_uprate")
-                            downrate_file_path = self.generate_and_save_plot(downrates, path, f"{env}_{cloud}_{cloud_env}_{version}_{model}_downrate")
+                            uprate_file_path = self.generate_comparison_bar_plot(uprates, data[env]["up_standard_list"] if "up_standard_list" in data[env] else [],data[env]["up_standard"] if "up_standard" in data[env] else 0, path, f"{env}_{cloud}_{cloud_env}_{version}_{model}_uprate")
+                            downrate_file_path = self.generate_comparison_bar_plot(downrates, data[env]["down_standard_list"] if "down_standard_list" in data[env] else [], data[env]["down_standard"] if "down_standard" in data[env] else 0, path, f"{env}_{cloud}_{cloud_env}_{version}_{model}_downrate")
                             output.append({
                                 "环境": env,
                                 "云端": cloud,
                                 "版本": version,
-                                "设备型号": f"{model}_{data[env][cloud][cloud_env][version][model]['system']}",
+                                "设备型号": model,
                                 "上行平均值": uprate_mean,
                                 "下行平均值": downrate_mean,
                                 "上行波动值": uprates_std,
@@ -138,7 +174,9 @@ class DataAnalysHandler:
                                 "下行波动范围": downrate_range,
                                 "上行分布图": uprate_file_path,
                                 "下行分布图": downrate_file_path,
-                                "样本数量": len(uprates)
+                                "样本数量": len(uprates),
+                                "上行参考值": data[env]["up_standard"] if "up_standard" in data[env] else 0,
+                                "下行参考值": data[env]["down_standard"] if "down_standard" in data[env] else 0
                             })
         return output
     
@@ -169,48 +207,50 @@ class DataAnalysHandler:
         # 上行平均值第一行, 上行波动值第二行, 上行波动范围第三行, 上行分布图第四行, 下行同理
         # 写入表头: 环境, 云端, 版本, 详细信息
         sheet["A1"] = "环境"
-        sheet["B1"] = "云端"
-        sheet["C1"] = "版本"
-        sheet["D1"] = "设备型号"
+        sheet["B1"] = "版本"
+        sheet["C1"] = "设备型号"
+        sheet["D1"] = "详细信息"
         sheet["E1"] = "详细信息"
-        sheet["F1"] = "详细信息"
-        unit = 9
+        unit = 11
         counter = 0
         imgsize = (1280 / 3, 720 / 3)
-        sheet.column_dimensions["F"].width = imgsize[0]*0.14
+        sheet.column_dimensions["E"].width = imgsize[0]*0.14
         sheet.column_dimensions["D"].width = 20
-        sheet.column_dimensions["E"].width = 20
         sheet.column_dimensions["A"].width = 20
         sheet.column_dimensions["B"].width = 20
         sheet.column_dimensions["C"].width = 20
         for i in data:
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "上行平均值", i["上行平均值"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "上行标准差", i["上行波动值"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "上行波动范围", i["上行波动范围"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "上行分布图"])
+            i["设备型号"] = self.model_mapping.mapping(i["设备型号"])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "样本数量", i["样本数量"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "上行参考值", i["上行参考值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "上行平均值", i["上行平均值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "上行标准差", i["上行波动值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "上行波动范围", i["上行波动范围"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "上行相对参考值偏差分布图" if i["上行参考值"] != 0 else "上行相对平均值偏差分布图"])
             img = Image(i["上行分布图"])
             img.width, img.height = imgsize
-            sheet.add_image(img, f"F{unit*counter+5}")
-            sheet.row_dimensions[unit*counter+5].height = imgsize[1]*0.8
+            sheet.add_image(img, f"E{unit*counter+7}")
+            sheet.row_dimensions[unit*counter+7].height = imgsize[1]*0.8
 
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "下行平均值", i["下行平均值"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "下行标准差", i["下行波动值"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "下行波动范围", i["下行波动范围"]])
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "下行分布图"])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "下行参考值", i["下行参考值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "下行平均值", i["下行平均值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "下行标准差", i["下行波动值"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "下行波动范围", i["下行波动范围"]])
+            sheet.append([i["环境"], i["版本"], i["设备型号"], "下行相对参考值偏差分布图" if i["下行参考值"] != 0 else "下行相对平均值偏差分布图"])
             img = Image(i["下行分布图"])
             img.width, img.height = imgsize
-            sheet.add_image(img, f"F{unit*counter+9}")
-            sheet.row_dimensions[unit*counter+9].height = imgsize[1]*0.8
+            sheet.add_image(img, f"E{unit*counter+12}")
+            sheet.row_dimensions[unit*counter+12].height = imgsize[1]*0.8
 
-            sheet.append([i["环境"], i["云端"], i["版本"], i["设备型号"], "样本数量", i["样本数量"]])
             counter += 1
         # 从第二行开始, 每9行分别合并1-4列单元格
         for i in range(2, len(data)*unit, unit):
-            sheet.merge_cells(f"A{i}:A{i+8}")
-            sheet.merge_cells(f"B{i}:B{i+8}")
-            sheet.merge_cells(f"C{i}:C{i+8}")
-            sheet.merge_cells(f"D{i}:D{i+8}")
-        
+            sheet.merge_cells(f"A{i}:A{i+unit-1}")
+            sheet.merge_cells(f"B{i}:B{i+unit-1}")
+            sheet.merge_cells(f"C{i}:C{i+unit-1}")
+        # 设置第5列数值居左
+        for i in range(2, len(data)*unit):
+            sheet[f"E{i}"].alignment = Alignment(horizontal='left')
         book_name = output_file_path+"output.xlsx" if output_file_path[-1] == "/" else output_file_path+"/output.xlsx"
         # 保存文件
         workbook.save(book_name)
@@ -224,48 +264,55 @@ class DataAnalysHandler:
         self.save_data_to_xlsx(output, output_file_path)
                     
                             
-    def generate_and_save_plot(self, data, folder_path, fig_name):
-    
-        # 计算平均值
-        mean_value = statistics.mean(data)
+    def generate_comparison_bar_plot(self, data, sample_data, standard_value, folder_path, fig_name):
+        # 计算偏离百分比
+        deviation_percent = [(x - standard_value) / standard_value * 100 for x in data]
+        sample_deviation_percent = [(x - standard_value) / standard_value * 100 for x in sample_data]
 
-        # 计算每个样本的相对偏差值并转换为百分比
-        deviation_percent = [abs(x - mean_value) / mean_value * 100 for x in data]
+        # 分组范围
+        bins = np.arange(-100, 110, 10)
 
-        # 初始化10个偏差值范围的计数器
-        deviation_counts = [0] * 10
+        # 计算每组的百分比
+        data_hist, _ = np.histogram(deviation_percent, bins)
+        sample_hist, _ = np.histogram(sample_deviation_percent, bins)
+        data_percent = data_hist / sum(data_hist) * 100
+        sample_percent = sample_hist / sum(sample_hist) * 100
 
-        # 对每个样本的偏差值进行分组计数
-        for deviation in deviation_percent:
-            index = int(deviation // 10)
-            index = min(index, 9)  # 确保最大的偏差值（100%）也被包含在最后一组
-            deviation_counts[index] += 1
-
-        # 将计数转换为占比
-        total_samples = len(data)
-        deviation_proportions = [count / total_samples for count in deviation_counts]
-
+        # 绘制柱状图
         plt.figure(figsize=(12, 6))
-        bars = plt.bar(range(10), deviation_proportions, tick_label=[f'{i*10}-{(i+1)*10}%' for i in range(10)])
+        # plt.bar(bins[:-1], data_percent, width=9, label='Sample', alpha=0.7)
+        bars1 = plt.bar(bins[:-1], data_percent, width=9, label='Sample', alpha=0.7)
+        if len(sample_data) > 0:
+            # plt.bar(bins[:-1], -sample_percent, width=9, label='Standard Sample', alpha=0.7)
+            bars2 = plt.bar(bins[:-1], -sample_percent, width=9, label='Standard Sample', alpha=0.7)
 
-        # 在每个柱子上方添加y值
-        for bar in bars:
+        plt.axhline(0, color='black', linewidth=0.8)  # 横轴
+        plt.xticks(bins)
+        plt.xlabel('Deviation Percentage (%)')
+        plt.ylabel('Percentage of Data Points (%)')
+        plt.title('Comparison of Data and Sample Data Deviation')
+        plt.legend()
+
+        # 在柱状图上添加文本
+        for bar, percent, count in zip(bars1, data_percent, data_hist):
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2.0, height, f'{height:.2%}', ha='center', va='bottom')
+            x_position = bar.get_x() + bar.get_width() / 2.0
+            if np.isfinite(height) and np.isfinite(x_position):
+                plt.text(x_position, height, f'{percent:.1f}%\n({count})', ha='center', va='bottom' if height < 0 else 'top')
 
-        # 使用32位随机字符串作为文件名
-        
+        if len(sample_data) > 0:
+            for bar, percent, count in zip(bars2, sample_percent, sample_hist):
+                height = bar.get_height()
+                x_position = bar.get_x() + bar.get_width() / 2.0
+                if np.isfinite(height) and np.isfinite(x_position):
+                    plt.text(x_position, height, f'{percent:.1f}%\n({count})', ha='center', va='top' if height < 0 else 'bottom')
+
+        plt.savefig(f"{folder_path}/{fig_name}.png")
+        plt.close()
+                
+        # 获取工作目录
         file_name = f"{fig_name}.png"
         file_path = os.path.join(folder_path, file_name)
-
-        # 保存图片
-        plt.savefig(file_path)
-
-        # 清除当前的figure，防止重复绘制
-        plt.clf()
-        
-        # 获取工作目录
-        
 
         # 返回图片文件的路径
         return os.getcwd().replace("\\", "/") + "/" + file_path if file_path[1] != ":" else file_path

@@ -195,7 +195,7 @@ class ReyeeSTHandler:
         if response.status_code == 200:
             logger.info(f"response:\n{response.json()}")
     
-    def speed_test_process(self, tag, from_desktop = True):
+    def speed_test_process(self, tag, env, from_desktop = True):
         timestamp = time.time()
         # transfer the timestamp to yyyy-mm-dd hh:mm:ss format
         timeArray = time.localtime(timestamp)
@@ -221,16 +221,16 @@ class ReyeeSTHandler:
             uprate = float(self.find_elements_in_view_group(x_uprate2)[2].text)
 
         #使用多线程发送消息
-        report_threading = threading.Thread(target=self.report_result_to_lark, args=(tag, downrate, uprate, timestamp, formatted_time))
+        report_threading = threading.Thread(target=self.report_result_to_lark, args=(tag, downrate, uprate, timestamp, formatted_time, env))
         report_threading.start()
         
         self.back_to_speed_test()
 
 
-    def execute_speed_tests(self, count, tag):
-        self.speed_test_process(tag)
+    def execute_speed_tests(self, count, tag, env):
+        self.speed_test_process(tag, env)
         for i in range(count-1):
-            self.speed_test_process(tag, False)
+            self.speed_test_process(tag, env, False)
         print("All process finished")
     
     def close(self):
@@ -242,7 +242,7 @@ def main():
     # reyee = ReyeeSTHandler("cn.com.ruijie.ywl", 13, 4723, "/wd/hub", webhook)
     # reyee.speed_test_process("CN")
     # reyee.speed_test_process("CN", False)
-    reyee.execute_speed_tests(10, "国内市场版本")
+    reyee.execute_speed_tests(100, "enet-8.1.6", "PUBLIC")
     # reyee.execute_speed_tests(10, "海外内测对接正式")
     reyee.close()
 
