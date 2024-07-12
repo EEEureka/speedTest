@@ -139,6 +139,9 @@ class GlobalSpeedTestHandler:
 
     def find_element_by_xpath(self, xpath):
         return self.driver.find_element(AppiumBy.XPATH, xpath)
+    
+    def find_elements_by_text(self, text):
+        return self.driver.find_elements(AppiumBy.ANDROID_UIAUTOMATOR, f'new UiSelector().text("{text}")')
 
     def report_result_to_lark(self, tag, downrate, uprate, timestamp, formatted_time):
         # send post to self.larkWebhook to report the speed test result
@@ -171,8 +174,7 @@ class GlobalSpeedTestHandler:
             logger.info(f"response:\n{response.json()}")
 
     def start_speed_test(self):
-        x_start_test = '//android.widget.Button[@resource-id="com.cnspeedtest.globalspeed:id/btn_star"]'
-        self.click_by_xpath(x_start_test)
+        self.find_elements_by_text("开始测试")[0].click()
         flag_element = '//android.widget.TextView[@resource-id="com.cnspeedtest.globalspeed:id/ping_delay_value"]'
         while self.find_element_by_xpath(flag_element).text == '--':
             time.sleep(1)
@@ -203,7 +205,6 @@ class GlobalSpeedTestHandler:
         # self.report_result_to_lark("信通院全球网测", downrate, uprate, timestamp, formatted_time)
         report_threading = threading.Thread(target=self.report_result_to_lark, args=("信通院全球网测", downrate, uprate, timestamp, formatted_time))
         report_threading.start()
-
         return
         
     def batch_execute_speed_test(self, count = 1):
@@ -221,8 +222,16 @@ def main():
     gst = GlobalSpeedTestHandler("com.cnspeedtest.globalspeed", 12, 4723, "/wd/hub", webhook)
     gst.batch_execute_speed_test(100)
     gst.close()
+
+def test1():
+    webhook = 'https://www.feishu.cn/flow/api/trigger-webhook/d6a7561781e891410f1b264bf2677bed'
+    gst = GlobalSpeedTestHandler("com.cnspeedtest.globalspeed", 12, 4723, "/wd/hub", webhook)
+    # gst.batch_execute_speed_test(100)
+    gst.start_speed_test()
+    gst.close()
     
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    test1()

@@ -8,6 +8,7 @@ class ModelMapping:
     
     def load_workbook(self):
         return openpyxl.load_workbook(self.excel_file_path)
+
     def mapping(self, model):
         # 打开models sheet
         sheet = self.wb['models']
@@ -15,7 +16,7 @@ class ModelMapping:
         for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=1, max_col=1):
             for cell in row:
                 if cell.value == model:
-                    # 找到model对应的行，将行的第二列值返回
+                    # 找到model对应的行，将行的第7,8列值返回
                     return sheet.cell(row=cell.row, column=7).value+' '+sheet.cell(row=cell.row, column=8).value.replace('#', '')
         return model
 
