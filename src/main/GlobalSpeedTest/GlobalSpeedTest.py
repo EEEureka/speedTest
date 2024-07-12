@@ -9,6 +9,7 @@ import time
 
 from appium import webdriver
 from appium.webdriver.common.appiumby import AppiumBy
+from src.main.security.GetCode import GetCode
 # appium 报错 需要安装 Appium-Python-Client；webdriver 报错需要安装 Appium Python Client: WebDriver module
 #安装方式 在报错的提示地方点击 install
 
@@ -26,13 +27,14 @@ from selenium.webdriver.support import expected_conditions as EC
 # heartrate.trace(browser=True)
 
 class GlobalSpeedTestHandler:
-    def __init__(self, packageName, platformVersion, port, api, webhook = '') -> None:
+    def __init__(self, packageName, platformVersion, port, api, codeFilePath, webhook = '') -> None:
         self.packageName = packageName
         self.platformVersion = platformVersion
         self.port = port
         self.api = api
         self.larkWebhook = webhook
         self.driver = self.init_conn()
+        self.password = GetCode(codeFilePath)
 
         
 
@@ -156,7 +158,7 @@ class GlobalSpeedTestHandler:
         # send post to self.larkWebhook to report the speed test result
         deviceInfo = self.get_device_info()
         data = {
-            "code": 0,
+            "code": self.password,
             "msg": "SPD_TEST",
             "cloud": "非睿易应用",
             "env": "非睿易应用", # 对接正式/测试
