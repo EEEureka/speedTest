@@ -56,6 +56,9 @@ class GlobalSpeedTestHandler:
         driver = webdriver.Remote(f"http://localhost:{self.port}{self.api}", caps)
         return driver
 
+    def text_locator(self, text):
+        return AppiumBy.ANDROID_UIAUTOMATOR, f'new UiSelector().text("{text}")'
+    
     def get_device_info(self):
         try:
             # 获取设备型号
@@ -89,6 +92,12 @@ class GlobalSpeedTestHandler:
             WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located((AppiumBy.XPATH, xpath))).click()
         except Exception as e:
             logger.error(f"An error occurred while clicking {xpath}: {str(e)}")
+    
+    def click_by_text(self, text, timeout=10):
+        try:
+            WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located(self.text_locator(text))).click()
+        except Exception as e:
+            logger.error(f"An error occurred while clicking {text}: {str(e)}")
     
     def get_connected_wifi_ssid(self):
         try:
