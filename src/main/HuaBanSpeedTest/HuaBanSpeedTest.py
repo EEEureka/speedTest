@@ -9,6 +9,7 @@ import time
 
 from appium import webdriver
 from appium.webdriver.common.appiumby import AppiumBy
+from src.main.security.GetCode import GetCode
 
 
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,13 +17,16 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 class HuaBanSpeedTestHandler:
-    def __init__(self, packageName, platformVersion, port, api, webhook = '') -> None:
-        self.packageName = packageName
-        self.platformVersion = platformVersion
+    def __init__(self, platformVersion, port, api, serial, codepath, webhook = '') -> None:
+        self.packageName =  "com.huawei.genexcloud.speedtest"
+        self.platformVersion = platformVersion,
+        self.activity = ".ui.SplashActivity"
         self.port = port
         self.api = api
         self.larkWebhook = webhook
         self.driver = self.init_conn()
+        self.executeSerial = serial
+        self.password = GetCode(codepath)
 
         
 
@@ -30,18 +34,17 @@ class HuaBanSpeedTestHandler:
         caps = {
         "platformName": "Android",
         "appium:platformVersion": str(self.platformVersion),
-        # "appium:appPackage": self.packageName,
+        "appium:appPackage": self.packageName,
         "appium:unicodeKeyboard": True,
         "appium:resetKeyboard": True,
         "appium:noReset": True,
-        "appium:newCommandTimeout": 1000,
+        "appium:newCommandTimeout": 100,
         "appium:automationName": "UiAutomator2",
         "appium:autoGrantPermissions": True,
         "appium:skipServerInstallation": True,
         "appium:skipDeviceInitialization": True,
-        # "appium:appActivity": ".MainActivity",
+        "appium:appActivity": self.activity,
         "appium:waitForIdleTimeout": 2,
-        "appium:newCommandTimeout": 600,
         }
         driver = webdriver.Remote(f"http://localhost:{self.port}{self.api}", caps)
         return driver
@@ -130,11 +133,12 @@ class HuaBanSpeedTestHandler:
         # send post to self.larkWebhook to report the speed test result
         deviceInfo = self.get_device_info()
         data = {
-            "code": 0,
+            "code": self.password,
             "msg": "SPD_TEST",
             "cloud": "非睿易应用",
             "env": "非睿易应用", # 对接正式/测试
             "tag": tag, # 版本编号， 即打包出来时的文件名
+            "executeSerial": self.executeSerial,
             "data": {
                 "downrate": downrate,
                 "uprate": uprate,
@@ -209,9 +213,13 @@ class HuaBanSpeedTestHandler:
         self.speed_test_process(False)
 
     def batch_speed_test(self, times = 1):
-        self.speed_test_process()
-        for i in range(times):
-            self.test_again()
+        try:
+            self.speed_test_process()
+            for i in range(times):
+                self.test_again()
+        except Exception as e:
+            logger.error(f"An error occurred while batch speed test: {str(e)}")
+            self.close()
     
     def close(self):
         self.driver.quit()

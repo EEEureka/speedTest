@@ -20,7 +20,7 @@ class DataAnalysHandler:
         self.output_file_path = output_file_path
         self.model_mapping = mapping.ModelMapping(model_base_path)
         
-    def transfer_xlsx_to_json(self):
+    def transfer_xlsx_to_json(self, serial):
         df = pandas.read_excel(self.input_file_path, sheet_name="测速数据收集")
         data = {}
         # 表格列有：环境	触发时间	云端（国内/海外）	云端环境(生产/测试）	版本（编号）	型号	系统	上行	下行
@@ -49,6 +49,8 @@ class DataAnalysHandler:
         # }
             
         for i in range(2, len(df)):
+            if serial != df.loc[i, "执行编号"]:
+                continue
             # 访问"环境"列i行值
             env = df.loc[i, "环境"]
             cloud = df.loc[i, "云端（国内/海外）"]
@@ -256,8 +258,8 @@ class DataAnalysHandler:
         workbook.save(book_name)
         return
     
-    def execute(self, input_file_path, output_file_path):
-        data = self.transfer_xlsx_to_json()
+    def execute(self, input_file_path, output_file_path, serial):
+        data = self.transfer_xlsx_to_json(serial)
         # 将data写入output.json
         # print(data)
         output = self.analyse_data(data)
@@ -275,6 +277,7 @@ class DataAnalysHandler:
         # 计算每组的百分比
         data_hist, _ = np.histogram(deviation_percent, bins)
         sample_hist, _ = np.histogram(sample_deviation_percent, bins)
+        print(data_hist)
         data_percent = data_hist / sum(data_hist) * 100
         sample_percent = sample_hist / sum(sample_hist) * 100
 
@@ -319,7 +322,7 @@ class DataAnalysHandler:
 
 
 def main():
-    input_file_path = "C:/Users/eureka/Downloads/测速数据收集 (4).xlsx"
+    input_file_path = "C:/Users/eureka/Downloads/测速数据收集 (8).xlsx"
     output_file_path = "D:/pyproj/st/src/output"
     dah = DataAnalysHandler(input_file_path, output_file_path)
     dah.execute(input_file_path, output_file_path)

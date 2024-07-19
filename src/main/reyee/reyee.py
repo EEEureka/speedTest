@@ -1,3 +1,4 @@
+import os
 import threading
 import re
 import json
@@ -9,6 +10,7 @@ import time
 
 from appium import webdriver
 from appium.webdriver.common.appiumby import AppiumBy
+from src.main.security.GetCode import GetCode
 # appium 报错 需要安装 Appium-Python-Client；webdriver 报错需要安装 Appium Python Client: WebDriver module
 #安装方式 在报错的提示地方点击 install
 
@@ -27,13 +29,15 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 class ReyeeSTHandler:
-    def __init__(self, packageName, platformVersion, port, api, webhook = '') -> None:
+    def __init__(self, packageName, platformVersion, port, api, codepath, executeSerial, webhook = '') -> None:
         self.packageName = packageName
         self.platformVersion = platformVersion
         self.port = port
         self.api = api
         self.larkWebhook = webhook
         self.driver = self.init_conn()
+        self.password = GetCode(codepath)
+        self.executeSerial = executeSerial
 
         
 
@@ -41,7 +45,7 @@ class ReyeeSTHandler:
         caps = {
         "platformName": "Android",
         "appium:platformVersion": str(self.platformVersion),
-        # "appium:appPackage": self.packageName,
+        "appium:appPackage": self.packageName,
         "appium:unicodeKeyboard": True,
         "appium:resetKeyboard": True,
         "appium:noReset": True,
@@ -50,9 +54,8 @@ class ReyeeSTHandler:
         "appium:autoGrantPermissions": True,
         "appium:skipServerInstallation": True,
         "appium:skipDeviceInitialization": True,
-        # "appium:appActivity": ".MainActivity",
+        "appium:appActivity": ".MainActivity",
         "appium:waitForIdleTimeout": 2,
-        "appium:newCommandTimeout": 600,
         }
         driver = webdriver.Remote(f"http://localhost:{self.port}{self.api}", caps)
         return driver
@@ -137,6 +140,7 @@ class ReyeeSTHandler:
             return []
 
     def goto_speedTestPage(self):
+        logger.info("goto speed test page")
         x_tool_kit = "//android.widget.Button[@content-desc=\"工具, tab, 4 of 5\"]/android.view.ViewGroup/android.view.ViewGroup"
         self.click_by_xpath(x_tool_kit)
         print("toolkit clicked")
@@ -149,13 +153,19 @@ class ReyeeSTHandler:
         x_start_test = "//android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup[2]"
         # exist_path = '//android.widget.FrameLayout[@resource-id="android:id/content"]/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[2]/android.view.ViewGroup[2]/android.view.ViewGroup[3]'
         exist_path = '//android.widget.FrameLayout[@resource-id="android:id/content"]/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[2]/android.view.ViewGroup[1]'
+        self.click_by_xpath(x_start_test)
+        time.sleep(5)
         while True:
-            self.click_by_xpath(x_start_test)
-            delay = self.find_elements_in_view_group(exist_path)[1].text
+
+            # delay = self.find_elements_in_view_group(exist_path)[1].text
             # if not self.check_element_exists(exist_path):
-            if delay == '--':
+            if self.check_element_exists(exist_path) and self.find_elements_in_view_group(exist_path)[1].text == "--":
                 time.sleep(2)
                 logger.info("continue called")
+                continue
+            elif not self.check_element_exists(exist_path):
+                self.click_by_xpath(x_start_test)
+                time.sleep(2)
                 continue
             else:
                 logger.info("Speed test started")
@@ -169,11 +179,12 @@ class ReyeeSTHandler:
         # send post to self.larkWebhook to report the speed test result
         deviceInfo = self.get_device_info()
         data = {
-            "code": 0,
+            "code": self.password,
             "msg": "SPD_TEST",
             "cloud": "CN",
             "env": env, # 对接正式/测试
             "tag": tag, # 版本编号， 即打包出来时的文件名
+            "executeSerial": self.executeSerial,
             "data": {
                 "downrate": downrate,
                 "uprate": uprate,
@@ -195,7 +206,7 @@ class ReyeeSTHandler:
         if response.status_code == 200:
             logger.info(f"response:\n{response.json()}")
     
-    def speed_test_process(self, tag, env, from_desktop = True):
+    def speed_test_process(self, tag, env, from_desktop = True, i=0):
         timestamp = time.time()
         # transfer the timestamp to yyyy-mm-dd hh:mm:ss format
         timeArray = time.localtime(timestamp)
@@ -223,22 +234,38 @@ class ReyeeSTHandler:
         #使用多线程发送消息
         report_threading = threading.Thread(target=self.report_result_to_lark, args=(tag, downrate, uprate, timestamp, formatted_time, env))
         report_threading.start()
+        self.take_screen_shot("src/main/reyee/screenshots/", self.executeSerial+'_'+str(int(time.time()))+'_'+str(i)+'.jpg')
         
         self.back_to_speed_test()
 
 
     def execute_speed_tests(self, count, tag, env):
-        self.speed_test_process(tag, env)
-        for i in range(count-1):
-            self.speed_test_process(tag, env, False)
-        print("All process finished")
+        try:
+            self.speed_test_process(tag, env)
+            for i in range(count-1):
+                self.speed_test_process(tag, env, False, i+1)
+            print("All process finished")
+        except:
+            print("An error occurred while executing speed tests")
+            self.close()
+
     
+    def take_screen_shot(self,save_path, file_name):
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        
+        file_path = os.path.join(save_path, file_name)
+        
+        self.driver.get_screenshot_as_file(file_path)
+        print(f"Screenshot saved to {file_path}")
+
     def close(self):
         self.driver.quit()
 
 def main():
     webhook = 'https://www.feishu.cn/flow/api/trigger-webhook/d6a7561781e891410f1b264bf2677bed'
-    reyee = ReyeeSTHandler("cn.com.ruijie.ywl", 12, 4723, "/wd/hub", webhook)
+    codepath = "C:/Users/eureka/Downloads/code.txt"
+    reyee = ReyeeSTHandler("cn.com.ruijie.ywl", 12, 4723, "/wd/hub", codepath, webhook)
     # reyee = ReyeeSTHandler("cn.com.ruijie.ywl", 13, 4723, "/wd/hub", webhook)
     # reyee.speed_test_process("CN")
     # reyee.speed_test_process("CN", False)

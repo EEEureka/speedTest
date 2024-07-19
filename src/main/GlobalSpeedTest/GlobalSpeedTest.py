@@ -27,14 +27,15 @@ from selenium.webdriver.support import expected_conditions as EC
 # heartrate.trace(browser=True)
 
 class GlobalSpeedTestHandler:
-    def __init__(self, packageName, platformVersion, port, api, codeFilePath, webhook = '') -> None:
-        self.packageName = packageName
+    def __init__(self, platformVersion, port, api, codeFilePath, executeSerial, webhook = '') -> None:
+        self.packageName = "com.cnspeedtest.globalspeed"
         self.platformVersion = platformVersion
         self.port = port
         self.api = api
         self.larkWebhook = webhook
         self.driver = self.init_conn()
         self.password = GetCode(codeFilePath)
+        self.executeSerial = executeSerial
 
         
 
@@ -42,18 +43,17 @@ class GlobalSpeedTestHandler:
         caps = {
         "platformName": "Android",
         "appium:platformVersion": str(self.platformVersion),
-        # "appium:appPackage": self.packageName,
+        "appium:appPackage": self.packageName,
         "appium:unicodeKeyboard": True,
         "appium:resetKeyboard": True,
         "appium:noReset": True,
-        "appium:newCommandTimeout": 1000,
+        "appium:newCommandTimeout": 100,
         "appium:automationName": "UiAutomator2",
         "appium:autoGrantPermissions": True,
         "appium:skipServerInstallation": True,
         "appium:skipDeviceInitialization": True,
-        # "appium:appActivity": ".MainActivity",
+        "appium:appActivity": "com.ruili.android.taierspeed.main.WelcomeActivity",
         "appium:waitForIdleTimeout": 2,
-        "appium:newCommandTimeout": 600,
         }
         driver = webdriver.Remote(f"http://localhost:{self.port}{self.api}", caps)
         return driver
@@ -151,7 +151,7 @@ class GlobalSpeedTestHandler:
     def find_element_by_xpath(self, xpath):
         return self.driver.find_element(AppiumBy.XPATH, xpath)
     
-    def find_elements_by_text(self, text):
+    def find_elements_by_text(self, text, timeout = 10):
         return self.driver.find_elements(AppiumBy.ANDROID_UIAUTOMATOR, f'new UiSelector().text("{text}")')
 
     def report_result_to_lark(self, tag, downrate, uprate, timestamp, formatted_time):
@@ -163,6 +163,7 @@ class GlobalSpeedTestHandler:
             "cloud": "非睿易应用",
             "env": "非睿易应用", # 对接正式/测试
             "tag": tag,
+            "executeSerial": self.executeSerial,
             "data": {
                 "downrate": downrate,
                 "uprate": uprate,
@@ -185,9 +186,10 @@ class GlobalSpeedTestHandler:
             logger.info(f"response:\n{response.json()}")
 
     def start_speed_test(self):
-        self.find_elements_by_text("开始测试")[0].click()
+        self.click_by_text("开始测试", 10)
         flag_element = '//android.widget.TextView[@resource-id="com.cnspeedtest.globalspeed:id/ping_delay_value"]'
         while self.find_element_by_xpath(flag_element).text == '--':
+            self.click_by_text("开始测试", 10)
             time.sleep(1)
         logger.info("start speed test successfully")
         return
@@ -219,9 +221,14 @@ class GlobalSpeedTestHandler:
         return
         
     def batch_execute_speed_test(self, count = 1):
-        for i in range(count):
-            self.speed_test_process()
-        logger.info("Speed tests completed")
+        try:
+            for i in range(count):
+                self.speed_test_process()
+            logger.info("Speed tests completed")
+        except Exception as e:
+            logger.error(f"An error occurred while executing speed test: {str(e)}")
+            self.close()
+                         
         
     def close(self):
         self.driver.quit()
