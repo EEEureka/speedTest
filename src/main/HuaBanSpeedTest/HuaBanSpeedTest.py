@@ -215,7 +215,7 @@ class HuaBanSpeedTestHandler:
     def batch_speed_test(self, times = 1):
         try:
             self.speed_test_process()
-            for i in range(times):
+            for i in range(times-1):
                 self.test_again()
         except Exception as e:
             logger.error(f"An error occurred while batch speed test: {str(e)}")

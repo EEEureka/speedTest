@@ -1,5 +1,5 @@
 
-查找用于启动的包名：
+查看用于启动的活动名称：
 adb shell
 dumpsys package {包名}
 
