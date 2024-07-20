@@ -234,7 +234,7 @@ class ReyeeSTHandler:
         #使用多线程发送消息
         report_threading = threading.Thread(target=self.report_result_to_lark, args=(tag, downrate, uprate, timestamp, formatted_time, env))
         report_threading.start()
-        self.take_screen_shot("src/main/reyee/screenshots/", self.executeSerial+'_'+str(int(time.time()))+'_'+str(i)+'.jpg')
+        # self.take_screen_shot("src/main/reyee/screenshots/", self.executeSerial+'_'+str(int(time.time()))+'_'+str(i)+'.jpg')
         
         self.back_to_speed_test()
 

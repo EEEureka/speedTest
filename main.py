@@ -72,12 +72,12 @@ def global_obj(serial, os):
     return GlobalSpeedTestHandler(os, 4723, "/wd/hub", codeFilePath, serial, webhook)
 
 def batch_execute_speed_test():
-    serial = 'SELF_DEBUG_2'
+    serial = 'HOME_ENV'
     times = 3
     env = 'PUBLIC'
     cn_tag = 'enet-8.1.7_2407181528'
     intl_tag = 'ruijiecloud-8.1.7_2407191014.apk'
-    os_version = 13
+    os_version = 12
     # os_version = 13
     start_time = time.time()
 
